@@ -4,10 +4,13 @@ enum GEOMETRY_TYPE
 	GEOMETRY_TYPE_AABB, GEOMETRY_TYPE_CIRCLE
 };
 
+enum COLLISION_TYPE
+{
+	collision_type_ground, collision_type_structure, collision_type_creature, collision_type_edge
+};
+
 struct ENTITY
 {
-
-
 
 	V2f pos;
 	V2f size;
@@ -19,7 +22,9 @@ struct ENTITY
 	V4f col;
 	u32 quad_id;
 	u32 id;
+	u32 ibo_id;
 	u32 geometric_type;
+	u32 collision_type;
 
 
 };

@@ -12,6 +12,8 @@
 #include "cj_renderer.h"
 #include "cj_platform.h"
 
+#include "cj_console.h"
+
 #include "cj_entity.h"
 #include "cj_collision.h"
 #include "cj_color_defines.h"

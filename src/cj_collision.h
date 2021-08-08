@@ -11,6 +11,7 @@ struct COLLISION_INFO
 };
 
 bool Collision_AABB(ENTITY *e1, ENTITY *e2);
+void CollisionResolve_AABB(ENTITY *e1, ENTITY *e2);
 
 COLLISION_INFO Collision_SAT_ENTITY_ENTITY(ENTITY *e1, ENTITY *e2);
 
@@ -36,6 +37,30 @@ bool Collision_AABB(ENTITY *e1, ENTITY *e2)
 	}
 
 	return collided;
+}
+
+void CollisionResolve_AABB(ENTITY *e1, ENTITY *e2)
+{
+	// Resolve X
+	if(e1->pos.x < e2->pos.x)
+	{
+		e1->pos.x = e2->pos.x - e1->size.x;
+	}
+	else if(e1->pos.x > e2->pos.x)
+	{
+		e1->pos.x = e2->pos.x + e2->size.x;
+	}
+
+	if(e1->pos.y < e2->pos.y)
+	{
+		e1->pos.y = e2->pos.y - e1->size.y;
+	}
+	else if(e1->pos.y > e2->pos.y)
+	{
+		e1->pos.y = e2->pos.y + e2->size.y;
+	}
+	
+	
 }
 
 COLLISION_INFO Collision_SAT_ENTITY_ENTITY(ENTITY *entity_1, ENTITY *entity_2)

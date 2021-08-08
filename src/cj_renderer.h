@@ -22,21 +22,23 @@
 struct TEXTUREINFO
 {
     
-    u32 texture_id;
-    
-    // for loading font textures
-    stbtt_packedchar packed_char[126];
-    stbtt_pack_context pack_context;
-    stbtt_aligned_quad glyph_quad;
-    
-    float xp;
-    float yp;
-    
-    u32 atlas_w = 1024;
-    u32 atlas_h = 1024;
-    
-    unsigned char *font_file_data;
-    unsigned char *pixels;
+    	u32 texture_id;
+    	
+    	// for loading font textures
+    	stbtt_packedchar packed_char[126];
+    	stbtt_pack_context pack_context;
+    	stbtt_aligned_quad glyph_quad;
+    	
+    	float xp;
+    	float yp;
+    	
+    	u32 atlas_w = 1024;
+    	u32 atlas_h = 1024;
+    	
+    	unsigned char *font_file_data;
+    	unsigned char *pixels;
+
+	u32 texture_loaded;
 };
 
 struct CJ_VTX_QUAD
@@ -60,16 +62,29 @@ struct CJ_VBO
 	u8 *base;
 	u32 used;
 	u32 size;
-
 };
 
-struct RENDERER
+struct CJ_IBO
+{
+	u32 id;
+	u32 *base;
+	u32 used;
+	u32 size;
+};
+
+struct CJ_RENDERER
 {
 	u32 VAO_texture_quad;
 	u32 VAO_font;
 
 	CJ_VBO vbo_sprite;
 	CJ_VBO vbo_text;
+	u32 n_chars_drawn;
+	u32 max_chars_to_render;
+	u32 vbo_text_index_tracker;
+
+
+	CJ_IBO ibo_sprite;
 
 	SHADER_PROGRAM shader[10];
 
@@ -79,12 +94,12 @@ struct RENDERER
 };
 
 void InitializeVBO(CJ_VBO *vbo, u8* base, u32 size, u32 n_attribs, CJ_VTX_ATTRIB *vtx_attrib);
-RENDERER CreateRenderer();
+CJ_RENDERER CreateRenderer();
 void InvertSTBBuffer(unsigned char *memory, u32 w, u32 h);
 void LoadTexture(TEXTUREINFO *tex_i, char *texture_path, u32 texture_type, i32 glyph_size);
 
 void RenderClear(V4f col);
-void DrawElements(RENDERER *renderer, u32 shader_index, u32 tex_index, u32 n_ents_to_draw, u32 n_ents_offset);
+void DrawElements(CJ_RENDERER *renderer, u32 shader_index, u32 tex_index, u32 n_ents_to_draw, u32 n_ents_offset);
 
 void InitializeVBO(CJ_VBO *vbo, u8* base, u32 size, u32 n_attribs, CJ_VTX_ATTRIB *vtx_attrib)
 {
@@ -105,10 +120,10 @@ void InitializeVBO(CJ_VBO *vbo, u8* base, u32 size, u32 n_attribs, CJ_VTX_ATTRIB
 
 }
 
-RENDERER CreateRenderer()
+CJ_RENDERER CreateRenderer()
 {
 
-	RENDERER renderer = {};
+	CJ_RENDERER renderer = {};
 
 	glGenVertexArrays(1, &renderer.VAO_font);
 	glBindVertexArray(renderer.VAO_font);
@@ -143,29 +158,32 @@ RENDERER CreateRenderer()
 
 
 	CJ_VTX_ATTRIB vbo_sprite_attrib[3];
-	vbo_sprite_attrib[0].size = 2;
-	vbo_sprite_attrib[0].type = GL_FLOAT;
-	vbo_sprite_attrib[0].stride = 8;
-	vbo_sprite_attrib[0].offset = 0;
+	vbo_sprite_attrib[0].size 	= 2;
+	vbo_sprite_attrib[0].type 	= GL_FLOAT;
+	vbo_sprite_attrib[0].stride 	= 8;
+	vbo_sprite_attrib[0].offset 	= 0;
 
-	vbo_sprite_attrib[1].size = 4;
-	vbo_sprite_attrib[1].type = GL_FLOAT;
-	vbo_sprite_attrib[1].stride = 8;
-	vbo_sprite_attrib[1].offset = 2;
+	vbo_sprite_attrib[1].size 	= 4;
+	vbo_sprite_attrib[1].type 	= GL_FLOAT;
+	vbo_sprite_attrib[1].stride 	= 8;
+	vbo_sprite_attrib[1].offset 	= 2;
 
-	vbo_sprite_attrib[2].size = 2;
-	vbo_sprite_attrib[2].type = GL_FLOAT;
-	vbo_sprite_attrib[2].stride = 8;
-	vbo_sprite_attrib[2].offset = 6;
+	vbo_sprite_attrib[2].size 	= 2;
+	vbo_sprite_attrib[2].type 	= GL_FLOAT;
+	vbo_sprite_attrib[2].stride 	= 8;
+	vbo_sprite_attrib[2].offset 	= 6;
 
-	const u32 size = 4 * 32 * 1000 * sizeof(float);
-	u8 *vertex_memory = (u8*)VirtualAlloc(0, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	const u32 size 		= 4 * 32 * 1000 * sizeof(float);
+	u8 *vertex_memory 	= (u8*)VirtualAlloc(0, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 	glBindVertexArray(renderer.VAO_texture_quad);
 	InitializeVBO(&renderer.vbo_sprite, vertex_memory, size, ArrayCount(vbo_sprite_attrib), vbo_sprite_attrib);
 
-	u32 IBO = 0;
-	const u32 quads = size / (sizeof(CJ_VTX_QUAD) * 4);
-	u32 ibo_data[quads * 6] = {};
+	u32 IBO 			= 0;
+	u32 quads 			= size / (sizeof(CJ_VTX_QUAD) * 4);
+	u32 ibo_size 			= quads * 6  * sizeof(u32);
+	u32 *ibo_data 			= (u32*)VirtualAlloc(0, ibo_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	renderer.ibo_sprite.base 	= ibo_data;
+	renderer.ibo_sprite.size 	= ibo_size;
 	for(u32 i = 0; i < quads; i++)
 	{
 		ibo_data[0 + (i * 6)] = 0 + (i * 4);
@@ -178,32 +196,38 @@ RENDERER CreateRenderer()
 
 	glGenBuffers(1, &IBO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(ibo_data), ibo_data, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, ibo_size, ibo_data, GL_DYNAMIC_DRAW);
 
 	CJ_VTX_ATTRIB vbo_text_attrib[3];
-	vbo_text_attrib[0].size = 2;
-	vbo_text_attrib[0].type = GL_FLOAT;
-	vbo_text_attrib[0].stride = 8;
-	vbo_text_attrib[0].offset = 0;
+	vbo_text_attrib[0].size 	= 2;
+	vbo_text_attrib[0].type 	= GL_FLOAT;
+	vbo_text_attrib[0].stride 	= 8;
+	vbo_text_attrib[0].offset 	= 0;
 
-	vbo_text_attrib[1].size = 4;
-	vbo_text_attrib[1].type = GL_FLOAT;
-	vbo_text_attrib[1].stride = 8;
-	vbo_text_attrib[1].offset = 2;
+	vbo_text_attrib[1].size 	= 4;
+	vbo_text_attrib[1].type 	= GL_FLOAT;
+	vbo_text_attrib[1].stride 	= 8;
+	vbo_text_attrib[1].offset 	= 2;
 
-	vbo_text_attrib[2].size = 2;
-	vbo_text_attrib[2].type = GL_FLOAT;
-	vbo_text_attrib[2].stride = 8;
-	vbo_text_attrib[2].offset = 6;
+	vbo_text_attrib[2].size 	= 2;
+	vbo_text_attrib[2].type 	= GL_FLOAT;
+	vbo_text_attrib[2].stride 	= 8;
+	vbo_text_attrib[2].offset 	= 6;
 
 
-	const u32 size_text = 256 * 8 * 6 * sizeof(float);
-	u8 *vertex_memory_for_text = (u8*)VirtualAlloc(0, size_text, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	u32 max_chars 			= 1024 * 5;
+	u32 vertices_per_quad 		= 6; // since we're not using IBO for this, else it would be 4
+	u32 size_text 			= max_chars * vertices_per_quad * sizeof(CJ_VTX_QUAD);
+	u8 *vertex_memory_for_text 	= (u8*)VirtualAlloc(0, size_text, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+
+	renderer.max_chars_to_render 	= max_chars;
+
 	glBindVertexArray(renderer.VAO_font);
 	InitializeVBO(&renderer.vbo_text, vertex_memory_for_text, size_text, ArrayCount(vbo_text_attrib), vbo_text_attrib);
 
-	LoadTexture(&renderer.texture_batch[0], "assets\\tileSheet32x32.png", LOAD_IMAGE, 0);
+	//LoadTexture(&renderer.texture_batch[0], "assets\\tileSheet32x32.png", LOAD_IMAGE, 0);
 	LoadTexture(&renderer.texture_batch[1], "C:\\windows\\fonts\\cour.ttf", LOAD_FONT, 64);
+	LoadTexture(&renderer.texture_batch[2], "C:\\windows\\fonts\\candara.ttf", LOAD_FONT, 30);
 
 	return renderer;
 }
@@ -224,72 +248,86 @@ void InvertSTBBuffer(unsigned char *memory, u32 w, u32 h)
 
 void LoadTexture(TEXTUREINFO *tex_i, char *texture_path, u32 texture_type, i32 glyph_size)
 {
-    
-    if(texture_type == LOAD_IMAGE)
-    {
-        
-        // Generating/binding and loading texture
-        i32 image_w = 0;
-        i32 image_h = 0;
-        i32 image_nChannels = 0;
-        
-        glGenTextures(1, &tex_i->texture_id);
-        glBindTexture(GL_TEXTURE_2D, tex_i->texture_id);
-        
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-        
-        stbi_set_flip_vertically_on_load(true);
-        u8 *texture = stbi_load(texture_path, &image_w, &image_h, &image_nChannels, 0);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_w, image_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture);
-        stbi_image_free(texture);
-        // End of gen/bind/load texture
-        
-    } 
-    else if (texture_type == LOAD_FONT)
-    {
-        
-        // Start gen/bind/load font texture atlas
-        glGenTextures(1, &tex_i->texture_id);
-        glBindTexture(GL_TEXTURE_2D, tex_i->texture_id);
-        
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-        
-        size_t bytes_read = 0;
-        u32 fontf_sz = 4 * tex_i->atlas_w * tex_i->atlas_h;
-        tex_i->font_file_data = (unsigned char*)calloc(fontf_sz, sizeof(unsigned char));
-        tex_i->pixels = (unsigned char*)calloc(fontf_sz, sizeof(unsigned char));
-        
-        bytes_read = fread(tex_i->font_file_data, 1, fontf_sz, fopen(texture_path, "rb"));
-        
-        // init pixel_bitmap and packing context
-        bool success = 0;
-        success = stbtt_PackBegin(&tex_i->pack_context, tex_i->pixels, tex_i->atlas_w, tex_i->atlas_h, 0, 1, 0);
-        
-        // set detail level of characters in font which requires the pixel_bitmap to be bigger
-        stbtt_PackSetOversampling(&tex_i->pack_context, 2, 2);
-        
-        // Set what characters in the pixel_map you want STBTT_POINT_SIZE makes the charcter size in tex_i->pixels
-        stbtt_PackFontRange(&tex_i->pack_context, tex_i->font_file_data, 0, STBTT_POINT_SIZE(glyph_size), ' ', 126,  tex_i->packed_char);
-        
-        // Invert font texture becuase stb give's it to us upside down ( y increases downward )
-        InvertSTBBuffer(tex_i->pixels, tex_i->atlas_w,  tex_i->atlas_h);
-        
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, tex_i->atlas_w, tex_i->atlas_h, 0, GL_RED, GL_UNSIGNED_BYTE, tex_i->pixels);
-        
-        free(tex_i->pixels);
-        free(tex_i->font_file_data);
-        stbtt_PackEnd(&tex_i->pack_context);
-        // End the packing context and free font_tex_ile and font atlas pixels
-        
-    }
+	if(texture_type == LOAD_IMAGE) 
+	{
+	    
+	    // Generating/binding and loading texture
+	    i32 image_w = 0;
+	    i32 image_h = 0;
+	    i32 image_nChannels = 0;
+
+	    if(tex_i->texture_id != 0)
+	    {
+		    glDeleteTextures(1, &tex_i->texture_id);
+	    }
+	    
+	    glGenTextures(1, &tex_i->texture_id);
+	    glBindTexture(GL_TEXTURE_2D, tex_i->texture_id);
+	    
+	    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	    
+	    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	    
+	    stbi_set_flip_vertically_on_load(true);
+	    u8 *texture = stbi_load(texture_path, &image_w, &image_h, &image_nChannels, 0);
+	    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_w, image_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture);
+	    stbi_image_free(texture);
+	    // End of gen/bind/load texture
+	    
+	    tex_i->texture_loaded = true;
+	
+	
+	    
+	} 
+	else if (texture_type == LOAD_FONT)
+	{
+	    
+	    if(tex_i->texture_id != 0)
+	    {
+		    glDeleteTextures(1, &tex_i->texture_id);
+	    }
+
+	    // Start gen/bind/load font texture atlas
+	    glGenTextures(1, &tex_i->texture_id);
+	    glBindTexture(GL_TEXTURE_2D, tex_i->texture_id);
+	    
+	    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	    
+	    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	    
+	    size_t bytes_read = 0;
+	    u32 fontf_sz = 4 * tex_i->atlas_w * tex_i->atlas_h;
+	    tex_i->font_file_data = (unsigned char*)calloc(fontf_sz, sizeof(unsigned char));
+	    tex_i->pixels = (unsigned char*)calloc(fontf_sz, sizeof(unsigned char));
+	    
+	    bytes_read = fread(tex_i->font_file_data, 1, fontf_sz, fopen(texture_path, "rb"));
+	    
+	    // init pixel_bitmap and packing context
+	    bool success = 0;
+	    success = stbtt_PackBegin(&tex_i->pack_context, tex_i->pixels, tex_i->atlas_w, tex_i->atlas_h, 0, 1, 0);
+	    
+	    // set detail level of characters in font which requires the pixel_bitmap to be bigger
+	    stbtt_PackSetOversampling(&tex_i->pack_context, 2, 2);
+	    
+	    // Set what characters in the pixel_map you want STBTT_POINT_SIZE makes the charcter size in tex_i->pixels
+	    stbtt_PackFontRange(&tex_i->pack_context, tex_i->font_file_data, 0, STBTT_POINT_SIZE(glyph_size), ' ', 126,  tex_i->packed_char);
+	    
+	    // Invert font texture becuase stb give's it to us upside down ( y increases downward )
+	    InvertSTBBuffer(tex_i->pixels, tex_i->atlas_w,  tex_i->atlas_h);
+	    
+	    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, tex_i->atlas_w, tex_i->atlas_h, 0, GL_RED, GL_UNSIGNED_BYTE, tex_i->pixels);
+	    
+	    free(tex_i->pixels);
+	    free(tex_i->font_file_data);
+	    stbtt_PackEnd(&tex_i->pack_context);
+	    // End the packing context and free font_tex_ile and font atlas pixels
+	    
+	    tex_i->texture_loaded = true;
+	}
     
 }
 
@@ -300,7 +338,7 @@ void RenderClear(V4f col)
 
 }
 
-void DrawElements(RENDERER *renderer, u32 shader_index, u32 tex_index, u32 n_ents_to_draw, u32 n_ents_offset)
+void DrawElements(CJ_RENDERER *renderer, u32 shader_index, u32 tex_index, u32 n_ents_to_draw, u32 n_ents_offset)
 {
 
 	UseShaderProgram(&renderer->shader[shader_index]);

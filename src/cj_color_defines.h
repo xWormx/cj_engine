@@ -8,6 +8,8 @@
 #define COLOR_BLUE 	v4f(0.0f, 0.0f, 1.0f, 1.0f)
 #define COLOR_LIGHTBLUE	v4f(0.2f, 1.0f, 1.0f, 1.0f)
 #define COLOR_PURPLE 	v4f(0.5f, 0.0f, 1.0f, 1.0f)
+#define COLOR_ORANGE 	v4f(1.0f, 0.5f, 0.0f, 1.0f)
+#define COLOR_YELLOW 	v4f(1.0f, 1.0f, 0.0f, 1.0f)
 
 
 
