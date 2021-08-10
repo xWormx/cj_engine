@@ -2,6 +2,9 @@
 #define CJ_PLATFORM_H
 
 
+#define GLFW_INCLUDE_NONE
+#include "glad.c"
+#include "glfw3.h"
 
 struct CJ_PLATFORM
 {

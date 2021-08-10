@@ -7,6 +7,8 @@ struct CJ_CONSOLE
 	u8	*str_clear_buffer;
 	u32	buffer_size;
 	i32 	char_index;
+
+	float	alpha_mul;
 };
 
 
@@ -22,14 +24,13 @@ void BeginConsole(CJ_CONSOLE *console, u32 n_chars_to_allocate)
 
 }
 
-void UpdateConsole(CJ_CONSOLE *console, CJ_RENDERER *renderer)
+void UpdateConsole(CJ_CONSOLE *console)
 {
-	u32 chars_drawn_until_now = renderer->vbo_text_index_tracker / (6 * sizeof(CJ_VTX_QUAD));
 
 	if(*textInput != '\0' &&
 	   *textInput >= 0    &&	// make sure one doesn't write 'ö' which will draw a blank space....
 	   *textInput <= 127  &&
-	   (console->char_index + chars_drawn_until_now) <= console->buffer_size)   	 
+	   (console->char_index) <= console->buffer_size)   	 
 	{
 
 		printf("index: %d\n", console->char_index);

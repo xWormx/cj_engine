@@ -95,6 +95,7 @@ struct CJ_RENDERER
 
 void InitializeVBO(CJ_VBO *vbo, u8* base, u32 size, u32 n_attribs, CJ_VTX_ATTRIB *vtx_attrib);
 CJ_RENDERER CreateRenderer();
+void UpdateRenderer(CJ_RENDERER *renderer);
 void InvertSTBBuffer(unsigned char *memory, u32 w, u32 h);
 void LoadTexture(TEXTUREINFO *tex_i, char *texture_path, u32 texture_type, i32 glyph_size);
 
@@ -232,6 +233,35 @@ CJ_RENDERER CreateRenderer()
 	return renderer;
 }
 
+//void UpdateRenderer(CJ_RENDERER *renderer, CJ_PLATFORM *platform)
+//{
+//	glViewport(0, 0, platform->win_w, platform->win_h);
+//	RenderClear(v4f(0.011f, 0.011f, 0.011f, 1.0f));
+//
+//	glBindVertexArray(renderer->VAO_texture_quad);
+//	glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo_sprite.id);
+//        
+//	glBufferSubData(GL_ARRAY_BUFFER, 0, renderer->vbo_sprite.size, (void*)renderer->vbo_sprite.base);
+//	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, renderer->ibo_sprite.size, (void*)renderer->ibo_sprite.base);
+//        
+//	glBindTexture(GL_TEXTURE_2D, renderer->texture_batch[0].texture_id);
+//	DrawElements(renderer, 1, 0, game->entity_batch_count, 0);
+//	DrawElements(renderer, 0, 0, 1, game->sprite_box->id);
+//        
+//	// RENDERING TEXT ///
+//	glBindVertexArray(renderer->VAO_font);
+//	UseShaderProgram(&renderer->shader[2]);
+//	glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo_text.id);
+//	glBindTexture(GL_TEXTURE_2D, renderer->texture_batch[2].texture_id);
+//
+//	// offset means offest into the VBO ont the GPU (vbo_text) not the buffer on the CPU
+//	glBufferSubData(GL_ARRAY_BUFFER, 0, renderer->vbo_text.size, (void*)renderer->vbo_text.base);
+//	glDrawArrays(GL_TRIANGLES, 0, renderer->max_chars_to_render * 6);
+//        
+//	// RENDERING TEXT END ///
+//
+//}
+
 
 void InvertSTBBuffer(unsigned char *memory, u32 w, u32 h)
 {
@@ -346,4 +376,5 @@ void DrawElements(CJ_RENDERER *renderer, u32 shader_index, u32 tex_index, u32 n_
 	glDrawElements(GL_TRIANGLES, 6 * n_ents_to_draw, GL_UNSIGNED_INT, (const void*)(n_ents_offset * 6 * sizeof(u32))); 
 
 }
+
 #endif

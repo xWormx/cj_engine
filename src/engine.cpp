@@ -1,7 +1,4 @@
 
-// TODO: Write a KeyPressedOnce();
-
-
 bool running = true;
 
 #include "assert.h"
@@ -12,47 +9,11 @@ bool running = true;
 
 GLenum err = 0;
 
-
-
-
 struct TEXT_INFO
 {
 	V2f sentence_pos;
 	V2f sentence_size;
 	u32 n_files_in_dir;
-};
-
-struct TILEMAP
-{
-	u32 w;
-	u32 h;
-	ENTITY *entity;
-};
-
-struct GAME_HANDLER
-{
-	ENTITY *entity_batch;
-	u32 entity_batch_count;
-	u32 entity_used;
-	u32 entity_id;
-    
-	CJ_VTX_QUAD *pVertex;
-	u32 vtx_id;
-	u32 ibo_id;
-    
-	TILEMAP tilemap;
-    
-	ENTITY *player;
-	ENTITY *monster;
-	ENTITY *current_chosen_atlas;
-	ENTITY *current_chosen_sprite;
-	ENTITY *sprite_box;
-    
-	ENTITY *camera;
-
-	CJ_CONSOLE console;
-    
-    
 };
 
 
@@ -61,6 +22,7 @@ bool CursorInsideText(CJ_PLATFORM *platform, TEXT_INFO ti);
 bool CursorInsideEntity(CJ_PLATFORM *platform, ENTITY *e);
 TEXT_INFO DrawText(CJ_PLATFORM *platform, CJ_RENDERER *renderer, u32 texture_index, char *str, V2f pos, V4f col);
 void SwapOrderInIBO(CJ_RENDERER *renderer, ENTITY *e1, ENTITY *e2);
+void UpdateVBO_Entity(CJ_VBO *vbo, GAME_HANDLER *game);
 
 void GetDirContent(TEXT_INFO *ti, char *storage, char *dir, u32 max_filesz_name)
 {
@@ -114,7 +76,6 @@ ENTITY *PushEntity(GAME_HANDLER *game, u32 size)
 	entity->id 		= game->entity_id;
 	entity->ibo_id		= game->ibo_id;
     
-	vtx			= game->pVertex + game->vtx_id;
     
     
 	// vtx_id is for pushing 4 * CJ_VTX_QUAD
@@ -134,9 +95,8 @@ void UpdateVBO_Entity(CJ_VBO *vbo, GAME_HANDLER *game)
 	assert(game->entity_used <= game->entity_batch_count);
     
 
-	ENTITY sorted_batch[150] = {};
-	assert(game->entity_used <= 150);
-	memcpy(sorted_batch, game->entity_batch, sizeof(ENTITY) * game->entity_used);
+	ENTITY *temp_sorted_batch = (ENTITY*)malloc( game->entity_used * sizeof(ENTITY) );
+	memcpy(temp_sorted_batch, game->entity_batch, sizeof(ENTITY) * game->entity_used);
 
 	for(u32 i = 1; i < game->entity_used; i++)
 	{
@@ -144,8 +104,8 @@ void UpdateVBO_Entity(CJ_VBO *vbo, GAME_HANDLER *game)
 		u32 curr_index = i;
 		for(u32 j = 1; j <= i; j++)
 		{
-			ENTITY *right = &sorted_batch[curr_index];
-			ENTITY *left = &sorted_batch[i - j];
+			ENTITY *right = &temp_sorted_batch[curr_index];
+			ENTITY *left = &temp_sorted_batch[i - j];
 			u32 col_type_r = right->collision_type;
 			u32 col_type_l = left->collision_type;
 
@@ -182,16 +142,14 @@ void UpdateVBO_Entity(CJ_VBO *vbo, GAME_HANDLER *game)
 	}
 
 
-
-
 	// Updating the data that's sent to the VBO
 	for(u32 i = 0; i < game->entity_used; i++)
 	{
-		V2f pos 	= sorted_batch[i].pos;
-		V2f size 	= sorted_batch[i].size;
-		V4f col 	= sorted_batch[i].col;
-		V2f tCoord_p	= sorted_batch[i].texcoord_pos;
-		V2f tCoord_sz	= sorted_batch[i].texcoord_size;
+		V2f pos 	= temp_sorted_batch[i].pos;
+		V2f size 	= temp_sorted_batch[i].size;
+		V4f col 	= temp_sorted_batch[i].col;
+		V2f tCoord_p	= temp_sorted_batch[i].texcoord_pos;
+		V2f tCoord_sz	= temp_sorted_batch[i].texcoord_size;
         
 		pVertex[(i * 4) + 0].pos = v2f(pos.x, pos.y);
 		pVertex[(i * 4) + 1].pos = v2f(pos.x, pos.y + size.y);
@@ -209,6 +167,8 @@ void UpdateVBO_Entity(CJ_VBO *vbo, GAME_HANDLER *game)
 		pVertex[(i * 4) + 3].tCoord = v2f(tCoord_p.x + tCoord_sz.y, tCoord_p.y);
         
 	}
+
+	free(temp_sorted_batch);
     
 }
 
@@ -431,7 +391,6 @@ void OnGameInit(CJ_PLATFORM *platform, CJ_RENDERER *renderer, GAME_HANDLER *game
         
 		game->entity_batch 		= (ENTITY*)calloc(1000, sizeof(ENTITY));
 		game->entity_batch_count	= 1000 * sizeof(ENTITY);
-		game->pVertex 			= (CJ_VTX_QUAD*)renderer->vbo_sprite.base;
 
 		V2f tp = v2f((32.0f / 512.0f), (32.0f / 512.0f));
         
@@ -553,6 +512,37 @@ void OnGameUpdate(CJ_PLATFORM *platform, CJ_RENDERER *renderer, GAME_HANDLER *ga
 	{
 		running = false;
 	}
+
+	if(KeyPressedOnce(GLFW_KEY_COMMA))
+	{
+		if(game->state == game_state_main_menu) game->state = game_state_console;
+		else if(game->state == game_state_console) game->state = game_state_main_menu;
+	}
+	
+	/////////////////////////////////// CONSOLE TEXT ///////////////////////////////////////////////
+
+	
+
+	if(game->state == game_state_console)
+	{
+		game->console.alpha_mul = 0.3f;
+
+		for(i32 y = 0; y < 10; y++)
+		{
+			DrawText(platform, renderer, 2, (char*)game->console.str_base, v2f(0.0f, y * 0.08f), COLOR_PURPLE);
+
+		}
+
+		char buff[100] = {};
+		sprintf(buff, "chars drawn: %d", renderer->n_chars_drawn);
+		DrawText(platform, renderer, 2, buff, v2f(1.0f, 0.1), COLOR_RED);
+	}
+	else
+	{
+		game->console.alpha_mul = 1.0f;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
     
 	float mov = 0.003f;
     
@@ -688,6 +678,9 @@ void OnGameUpdate(CJ_PLATFORM *platform, CJ_RENDERER *renderer, GAME_HANDLER *ga
 			game->monster->pos += ci.mtv;
 		}
 
+		game->entity_batch[i].col.w = game->console.alpha_mul;
+		
+
 
 	}
 
@@ -769,16 +762,42 @@ void OnGameUpdate(CJ_PLATFORM *platform, CJ_RENDERER *renderer, GAME_HANDLER *ga
     
     
 	ti = DrawText(platform, renderer, 2, "Save map", v2f(1.7f, 1.2f), tCol_save);
+	static bool b_save_as = false;
 	if(CursorInsideText(platform, ti)) 	
 	{ 
 		tCol_save = COLOR_RED; 
 		if(MousePressedOnce(GLFW_MOUSE_BUTTON_LEFT))
 		{
 			ti = DrawText(platform, renderer, 2, "LEFT MOUSE PRESSED", v2f(0.7f, 1.3f), tCol_select);
+			b_save_as = true;
 		}
 	} else 
 	{ 
 		tCol_save = COLOR_GREEN; 
+	}
+
+	if(b_save_as)
+	{
+
+		char save_as[256] = "Save As: ";
+		static char file_name[256] = {};
+		if(KeyPressedOnce(GLFW_KEY_ENTER))
+		{
+			// Creating a new file if it doesn't already exist
+			if(file_name[0] != '\0')
+			{
+				FILE *f_handle = fopen(file_name, "ab+");
+				fclose(f_handle);
+				b_save_as = false;
+			}
+
+		}
+		else
+		{
+			sprintf(file_name, (char*)game->console.str_base);
+			strcat(save_as, file_name);
+			ti = DrawText(platform, renderer, 2, save_as, v2f(0.7f, 1.3f), tCol_select);
+		}
 	}
     
     
@@ -864,19 +883,6 @@ void OnGameUpdate(CJ_PLATFORM *platform, CJ_RENDERER *renderer, GAME_HANDLER *ga
 	}
 
 
-	/////////////////////////////////// CONSOLE TEXT ///////////////////////////////////////////////
-
-	for(i32 y = 0; y < 10; y++)
-	{
-		ti = DrawText(platform, renderer, 2, (char*)game->console.str_base, v2f(0.0f, y * 0.08f), COLOR_PURPLE);
-
-	}
-
-	char buff[100] = {};
-	sprintf(buff, "chars drawn: %d", renderer->n_chars_drawn);
-	DrawText(platform, renderer, 2, buff, v2f(1.0f, 0.1), COLOR_RED);
-
-	////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
@@ -898,40 +904,52 @@ int main()
 	while(!glfwWindowShouldClose(platform.window) && running)
 	{
         
+		//////// PLATFORM ///////////
 		UpdatePlatform(&platform);
 
-		BeginConsole(&game.console, renderer.max_chars_to_render);
-		UpdateConsole(&game.console, &renderer);
+		//////// CONSOLE ///////////
+		u32 max_console_chars = 10;
+		//BeginConsole(&game.console, renderer.max_chars_to_render);
+		BeginConsole(&game.console, max_console_chars);
+		UpdateConsole(&game.console);
+
+
+		//////// GAME ///////////
+		OnGameInit(&platform, &renderer, &game);
+		OnGameUpdate(&platform, &renderer, &game);
+
+
 
 		glViewport(0, 0, platform.win_w, platform.win_h);
 		RenderClear(v4f(0.011f, 0.011f, 0.011f, 1.0f));
-        
-		OnGameInit(&platform, &renderer, &game);
-		OnGameUpdate(&platform, &renderer, &game);
-        
-        
+        	
+
+
 		glBindVertexArray(renderer.VAO_texture_quad);
 		glBindBuffer(GL_ARRAY_BUFFER, renderer.vbo_sprite.id);
-        
-		UpdateVBO_Entity(&renderer.vbo_sprite, &game);
 		glBufferSubData(GL_ARRAY_BUFFER, 0, renderer.vbo_sprite.size, (void*)renderer.vbo_sprite.base);
-		glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, renderer.ibo_sprite.size, (void*)renderer.ibo_sprite.base);
-        
-		glBindTexture(GL_TEXTURE_2D, renderer.texture_batch[0].texture_id);
+
 		DrawElements(&renderer, 1, 0, game.entity_batch_count, 0);
 		DrawElements(&renderer, 0, 0, 1, game.sprite_box->id);
-        
+
+		UpdateVBO_Entity(&renderer.vbo_sprite, &game);
+        	
 		// RENDERING TEXT ///
-		glBindVertexArray(renderer.VAO_font);
 		UseShaderProgram(&renderer.shader[2]);
+		glBindVertexArray(renderer.VAO_font);
 		glBindBuffer(GL_ARRAY_BUFFER, renderer.vbo_text.id);
 		glBindTexture(GL_TEXTURE_2D, renderer.texture_batch[2].texture_id);
 
 		// offset means offest into the VBO ont the GPU (vbo_text) not the buffer on the CPU
 		glBufferSubData(GL_ARRAY_BUFFER, 0, renderer.vbo_text.size, (void*)renderer.vbo_text.base);
 		glDrawArrays(GL_TRIANGLES, 0, renderer.max_chars_to_render * 6);
-        
+        	
 		// RENDERING TEXT END ///
+        
+	//	//////// RENDERER ///////////
+	//	UpdateVBO_Entity(&renderer.vbo_sprite, &game);
+	//	UpdateRenderer(&renderer, &platform, &game);
+        
         
 		SwapBuffers(platform);
 	}
@@ -945,3 +963,5 @@ int main()
     
     return 0;
 }
+
+
