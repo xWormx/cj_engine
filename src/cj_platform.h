@@ -3,8 +3,12 @@
 
 
 #define GLFW_INCLUDE_NONE
+#define GLFW_EXPOSE_NATIVE_WIN32
 #include "glad.c"
 #include "glfw3.h"
+
+#include "glfw3native.h"
+#include "commctrl.h"
 
 struct CJ_PLATFORM
 {
