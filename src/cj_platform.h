@@ -10,6 +10,8 @@
 #include "glfw3native.h"
 #include "commctrl.h"
 
+char global_text_input[1] = {};
+
 struct CJ_PLATFORM
 {
 	GLFWwindow *window;
@@ -101,7 +103,6 @@ bool KeyPressedOnce(u32 key)
 bool MousePressedOnce(u32 key)
 {
 	return input_mouse_once[key];
-
 }
 
 void ProcessInput(CJ_PLATFORM *platform)
@@ -153,14 +154,14 @@ void key_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i32 mod
 }
 
 
-char textInput[1] = {};
+
 bool charPressed = false;
 void char_callback(GLFWwindow *window, u32 code_point)
 {
 	if(!charPressed)
 	{
-		*textInput = code_point;
-		printf("%s\n", textInput);
+		*global_text_input = code_point;
+		printf("%s\n", global_text_input);
 	}
 
 }
@@ -192,6 +193,8 @@ void GetWindowSize(CJ_PLATFORM *platform)
 void UpdatePlatform(CJ_PLATFORM *platform)
 {
 	
+	*global_text_input = '\0';
+
 	platform->frame_endtime = GetTime();
 	platform->time_per_frame = platform->frame_endtime - platform->frame_starttime;
 	platform->frame_starttime = GetTime();
@@ -201,6 +204,7 @@ void UpdatePlatform(CJ_PLATFORM *platform)
 	GetCursorPos_INT(platform);
 	ProcessInput(platform);
 	glfwPollEvents();
+
 }
 
 void SwapBuffers(CJ_PLATFORM platform)

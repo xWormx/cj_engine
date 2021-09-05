@@ -11,7 +11,6 @@ enum COLLISION_TYPE
 
 struct ENTITY
 {
-
 	V2f pos;
 	V2f size;
 	float rotation;
@@ -25,7 +24,6 @@ struct ENTITY
 	u32 ibo_id;
 	u32 geometric_type;
 	u32 collision_type;
-
 
 };
 

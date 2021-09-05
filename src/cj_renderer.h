@@ -28,6 +28,7 @@ struct TEXTUREINFO
     	stbtt_packedchar packed_char[126];
     	stbtt_pack_context pack_context;
     	stbtt_aligned_quad glyph_quad;
+		u32 glyph_size;
     	
     	float xp;
     	float yp;
@@ -72,12 +73,20 @@ struct CJ_IBO
 	u32 size;
 };
 
+struct CJ_RENDER_COMMANDS
+{
+		u32 n_entities_to_draw;
+		u32 draw_offset[512];
+};
 struct CJ_RENDERER
 {
+	CJ_RENDER_COMMANDS commands;
+
 	u32 VAO_texture_quad;
 	u32 VAO_font;
 
 	CJ_VBO vbo_sprite;
+	u32 max_quads_to_render;
 	CJ_VBO vbo_text;
 	u32 n_chars_drawn;
 	u32 max_chars_to_render;
@@ -100,6 +109,8 @@ void InvertSTBBuffer(unsigned char *memory, u32 w, u32 h);
 void LoadTexture(TEXTUREINFO *tex_i, char *texture_path, u32 texture_type, i32 glyph_size);
 
 void RenderClear(V4f col);
+
+void DrawArrays(CJ_RENDERER *renderer, u32 shader_index, u32 tex_index, u32 n_ents_to_draw);
 void DrawElements(CJ_RENDERER *renderer, u32 shader_index, u32 tex_index, u32 n_ents_to_draw, u32 n_ents_offset);
 
 void InitializeVBO(CJ_VBO *vbo, u8* base, u32 size, u32 n_attribs, CJ_VTX_ATTRIB *vtx_attrib)
@@ -159,30 +170,35 @@ CJ_RENDERER CreateRenderer()
 
 
 	CJ_VTX_ATTRIB vbo_sprite_attrib[3];
-	vbo_sprite_attrib[0].size 	= 2;
-	vbo_sprite_attrib[0].type 	= GL_FLOAT;
+	vbo_sprite_attrib[0].size 		= 2;
+	vbo_sprite_attrib[0].type 		= GL_FLOAT;
 	vbo_sprite_attrib[0].stride 	= 8;
 	vbo_sprite_attrib[0].offset 	= 0;
 
-	vbo_sprite_attrib[1].size 	= 4;
-	vbo_sprite_attrib[1].type 	= GL_FLOAT;
+	vbo_sprite_attrib[1].size 		= 4;
+	vbo_sprite_attrib[1].type 		= GL_FLOAT;
 	vbo_sprite_attrib[1].stride 	= 8;
 	vbo_sprite_attrib[1].offset 	= 2;
 
-	vbo_sprite_attrib[2].size 	= 2;
-	vbo_sprite_attrib[2].type 	= GL_FLOAT;
+	vbo_sprite_attrib[2].size 		= 2;
+	vbo_sprite_attrib[2].type 		= GL_FLOAT;
 	vbo_sprite_attrib[2].stride 	= 8;
 	vbo_sprite_attrib[2].offset 	= 6;
 
-	const u32 size 		= 4 * 32 * 1000 * sizeof(float);
-	u8 *vertex_memory 	= (u8*)VirtualAlloc(0, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	u32 verts_per_quad 		= 4;
+	u32 size_per_vertex 	= sizeof(CJ_VTX_QUAD); 
+	u32 max_quads			= 3000;
+	u32 size 				= max_quads * verts_per_quad * size_per_vertex;
+	u8 *vertex_memory 		= (u8*)VirtualAlloc(0, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 	glBindVertexArray(renderer.VAO_texture_quad);
 	InitializeVBO(&renderer.vbo_sprite, vertex_memory, size, ArrayCount(vbo_sprite_attrib), vbo_sprite_attrib);
 
-	u32 IBO 			= 0;
-	u32 quads 			= size / (sizeof(CJ_VTX_QUAD) * 4);
-	u32 ibo_size 			= quads * 6  * sizeof(u32);
-	u32 *ibo_data 			= (u32*)VirtualAlloc(0, ibo_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	renderer.max_quads_to_render = max_quads;
+
+	u32 IBO 					= 0;
+	u32 quads 					= size / (sizeof(CJ_VTX_QUAD) * 4);
+	u32 ibo_size 				= quads * 6  * sizeof(u32);
+	u32 *ibo_data 				= (u32*)VirtualAlloc(0, ibo_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 	renderer.ibo_sprite.base 	= ibo_data;
 	renderer.ibo_sprite.size 	= ibo_size;
 	for(u32 i = 0; i < quads; i++)
@@ -216,9 +232,9 @@ CJ_RENDERER CreateRenderer()
 	vbo_text_attrib[2].offset 	= 6;
 
 
-	u32 max_chars 			= 1024 * 5;
+	u32 max_chars 				= 1024 * 20;
 	u32 vertices_per_quad 		= 6; // since we're not using IBO for this, else it would be 4
-	u32 size_text 			= max_chars * vertices_per_quad * sizeof(CJ_VTX_QUAD);
+	u32 size_text 				= max_chars * vertices_per_quad * sizeof(CJ_VTX_QUAD);
 	u8 *vertex_memory_for_text 	= (u8*)VirtualAlloc(0, size_text, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 
 	renderer.max_chars_to_render 	= max_chars;
@@ -226,41 +242,108 @@ CJ_RENDERER CreateRenderer()
 	glBindVertexArray(renderer.VAO_font);
 	InitializeVBO(&renderer.vbo_text, vertex_memory_for_text, size_text, ArrayCount(vbo_text_attrib), vbo_text_attrib);
 
-	//LoadTexture(&renderer.texture_batch[0], "assets\\tileSheet32x32.png", LOAD_IMAGE, 0);
+	LoadTexture(&renderer.texture_batch[0], "assets\\tileSheet32x32.png", LOAD_IMAGE, 0);
 	LoadTexture(&renderer.texture_batch[1], "C:\\windows\\fonts\\cour.ttf", LOAD_FONT, 64);
 	LoadTexture(&renderer.texture_batch[2], "C:\\windows\\fonts\\candara.ttf", LOAD_FONT, 30);
 
 	return renderer;
 }
 
-//void UpdateRenderer(CJ_RENDERER *renderer, CJ_PLATFORM *platform)
-//{
-//	glViewport(0, 0, platform->win_w, platform->win_h);
-//	RenderClear(v4f(0.011f, 0.011f, 0.011f, 1.0f));
-//
-//	glBindVertexArray(renderer->VAO_texture_quad);
-//	glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo_sprite.id);
-//        
-//	glBufferSubData(GL_ARRAY_BUFFER, 0, renderer->vbo_sprite.size, (void*)renderer->vbo_sprite.base);
-//	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, renderer->ibo_sprite.size, (void*)renderer->ibo_sprite.base);
-//        
-//	glBindTexture(GL_TEXTURE_2D, renderer->texture_batch[0].texture_id);
-//	DrawElements(renderer, 1, 0, game->entity_batch_count, 0);
-//	DrawElements(renderer, 0, 0, 1, game->sprite_box->id);
-//        
-//	// RENDERING TEXT ///
-//	glBindVertexArray(renderer->VAO_font);
-//	UseShaderProgram(&renderer->shader[2]);
-//	glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo_text.id);
-//	glBindTexture(GL_TEXTURE_2D, renderer->texture_batch[2].texture_id);
-//
-//	// offset means offest into the VBO ont the GPU (vbo_text) not the buffer on the CPU
-//	glBufferSubData(GL_ARRAY_BUFFER, 0, renderer->vbo_text.size, (void*)renderer->vbo_text.base);
-//	glDrawArrays(GL_TRIANGLES, 0, renderer->max_chars_to_render * 6);
-//        
-//	// RENDERING TEXT END ///
-//
-//}
+
+#if 0
+enum RENDER_ELEMENT_TYPE
+{
+		render_element_clear, render_element_viewport
+};
+
+struct RENDER_ELEMENT
+{
+		RENDER_ELEMENT_TYPE type;
+		u32 size;
+		u8 *data:
+};
+
+struct RENDER_ELEMENT_TEXTURED_QUAD
+{
+		u32 shader;
+		u32 texture;
+		u32 quads_to_draw;
+		u32 quad_offset;
+};
+
+struct RENDER_COMMAND_BUFFER
+{
+	RENDER_ELEMENT *render_element_batch;
+};
+
+#endif
+
+void UpdateRenderer(CJ_RENDERER *renderer, CJ_PLATFORM *platform)
+{
+        
+#if 0
+		RENDER_COMMAND_BUFFER *rcb;
+	   	rcb->render_element_batch = malloc(1000 * sizeof(RENDER_ELEMENT);
+
+
+		game->player->renderable = PushRenderable(renderer, render_element_texture_quad);
+
+		RENDER_COMMAND_BUFFER *render_command_buffer = rcb;
+
+		while(render_command_buffer->render_element_batch)
+		{
+				RENDER_COMMAND_ELEMENT element = render_command_buffer->render_element_batch;
+				switch(element.type)
+				{
+						case render_element_viewport:
+								{
+									V4i vpr = *(V4i*)element->data;
+									glViewport(vpr.x, vpr.y, vpr.w, vpr.h);
+									render_command_buffer->render_element_batch += element.size;
+								} break;
+						case render_element_clear:
+								{
+									RenderClear(element->clear_color);
+									render_command_buffer->render_element_batch += sizeof(render_element_clear);
+								} break;
+						case render_element_textured_quad:
+								{
+									glBindVertexArray(renderer->VAO_texture_quad);
+									glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo_sprite.id);
+									glBufferSubData(GL_ARRAY_BUFFER, 0, renderer->vbo_sprite.size, (void*)renderer->vbo_sprite.base);
+
+									RENDER_ELEMENT_TEXTURED_QUAD element = element.type;
+									DrawElements(renderer, element->shader, element->texture, element->quads_to_draw, element->quad_offset);
+								} break;
+				}
+
+
+		}
+#endif
+
+		glViewport(0, 0, platform->win_w, platform->win_h);
+		RenderClear(v4f(0.011f, 0.011f, 0.011f, 1.0f));
+
+		glBindVertexArray(renderer->VAO_texture_quad);
+		glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo_sprite.id);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, renderer->vbo_sprite.size, (void*)renderer->vbo_sprite.base);
+
+		DrawElements(renderer, 1, 0, renderer->commands.n_entities_to_draw, 0);
+		DrawElements(renderer, 0, 0, 1, renderer->commands.draw_offset[0]);
+		DrawElements(renderer, 0, 0, 1, renderer->commands.draw_offset[1]);
+		DrawElements(renderer, 0, 0, 1, renderer->commands.draw_offset[2]);
+
+        	
+		// RENDERING TEXT ///
+		glBindVertexArray(renderer->VAO_font);
+		glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo_text.id);
+		// offset means offest into the VBO ont the GPU (vbo_text) not the buffer on the CPU
+		glBufferSubData(GL_ARRAY_BUFFER, 0, renderer->vbo_text.size, (void*)renderer->vbo_text.base);
+
+		DrawArrays(renderer, 2, 2, renderer->max_chars_to_render);
+		// RENDERING TEXT END ///
+
+}
 
 
 void InvertSTBBuffer(unsigned char *memory, u32 w, u32 h)
@@ -319,6 +402,8 @@ void LoadTexture(TEXTUREINFO *tex_i, char *texture_path, u32 texture_type, i32 g
 		    glDeleteTextures(1, &tex_i->texture_id);
 	    }
 
+		tex_i->glyph_size = glyph_size;
+
 	    // Start gen/bind/load font texture atlas
 	    glGenTextures(1, &tex_i->texture_id);
 	    glBindTexture(GL_TEXTURE_2D, tex_i->texture_id);
@@ -366,6 +451,13 @@ void RenderClear(V4f col)
 	glClearColor(col.x, col.y, col.z, col.w);
 	glClear(GL_COLOR_BUFFER_BIT);
 
+}
+
+void DrawArrays(CJ_RENDERER *renderer, u32 shader_index, u32 tex_index, u32 n_ents_to_draw)
+{
+		UseShaderProgram(&renderer->shader[shader_index]);
+		glBindTexture(GL_TEXTURE_2D, renderer->texture_batch[tex_index].texture_id);
+		glDrawArrays(GL_TRIANGLES, 0, n_ents_to_draw * 6);
 }
 
 void DrawElements(CJ_RENDERER *renderer, u32 shader_index, u32 tex_index, u32 n_ents_to_draw, u32 n_ents_offset)

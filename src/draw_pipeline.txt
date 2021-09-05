@@ -1,0 +1,55 @@
+
+struct GAME
+{
+	Entity *entity_batch;
+	u32 entity_batch_count;
+	u32 entity_used;
+	u32 entity_id;
+    
+	TILEMAP tilemap;
+    
+	ENTITY *player;
+	ENTITY *monster;
+	ENTITY *current_chosen_atlas;
+	ENTITY *current_chosen_sprite;
+	ENTITY *sprite_box;
+	ENTITY *collision_select_box;
+    
+	ENTITY *camera;
+
+	CJ_CONSOLE console;
+    
+	GAME_STATE state = game_state_main_menu;
+};
+
+-------------------------------------------------------
+|   Current way from Entity creation to rendering     |	
+-------------------------------------------------------
+
+
+--- During Game Initialization ---
+
+1. Allocate a big entity batch
+2. PushEntity(), and initialize its data-members.
+
+
+--- During Game Update ---
+
+3. Update an entitie's members
+
+
+
+--- Before Passing entities to renderer ---
+
+4. Sort the VBO containing the Entity-data
+
+
+
+--- During Update Renderer ---
+5. Bind VAO, VBO, Send updated VBO to the GPU
+6. DrawElements()   
+
+
+
+---------------------------------------------------------
+

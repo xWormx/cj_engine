@@ -1,7 +1,7 @@
 @echo off
 
 SET CJ_LIB="..\CJ_LIB"
-SET GLAD=C:\GLAD\src
+SET GLAD="..\GLAD"
 SET GLFW_INCLUDE="..\GLFW\glfw-3.3.bin.WIN64\include\GLFW"
 SET GLFW_LIB="..\GLFW\glfw-3.3.bin.WIN64\lib-vc2019"
 SET STB=C:\stb
